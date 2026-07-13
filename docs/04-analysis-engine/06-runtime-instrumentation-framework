@@ -1,0 +1,903 @@
+---
+title: Runtime Instrumentation Framework
+chapter: 14
+part: Analysis Engine Layer
+layer: Analysis Engine Layer
+status: Released
+version: 1.0
+author: MASAP Architecture Team
+last_updated: 2026-07
+---
+
+# 第14章 动态运行时采集框架（Runtime Instrumentation Framework）
+
+> **Chapter 14**
+>
+> **Runtime Instrumentation Framework**
+
+---
+
+# 1. 本章目标（Objectives）
+
+Runtime Instrumentation Framework 是动态分析体系中的底层运行时观测能力。
+
+其核心目标：
+
+> 在应用运行过程中，以低侵入、高覆盖的方式采集应用真实行为，为 Dynamic Analysis Engine 提供完整、可信的运行证据。
+
+它解决的问题：
+
+```
+应用运行时发生了什么？
+
+↓
+
+哪些系统能力被调用？
+
+↓
+
+哪些数据被访问？
+
+↓
+
+哪些数据被传输？
+
+↓
+
+哪些隐藏行为被触发？
+```
+
+---
+
+# 2. 在整体架构中的位置
+
+Runtime Instrumentation Framework 位于：
+
+```
+Analysis Engine Layer
+
+        |
+
+Dynamic Analysis Engine
+
+        |
+
+Runtime Instrumentation Framework
+
+```
+
+整体关系：
+
+```mermaid
+flowchart LR
+
+Environment["Runtime Environment"]
+
+Instrumentation["Runtime Instrumentation Framework"]
+
+Event["Runtime Event Model"]
+
+Dynamic["Dynamic Analysis Engine"]
+
+Behavior["Behavior Modeling"]
+
+
+Environment --> Instrumentation
+
+Instrumentation --> Event
+
+Event --> Dynamic
+
+Dynamic --> Behavior
+
+```
+
+---
+
+# 3. 设计原则
+
+## 3.1 全覆盖原则
+
+覆盖：
+
+- Framework API；
+- Native调用；
+- 系统行为；
+- 网络行为；
+- UI行为；
+- 内存行为。
+
+
+---
+
+## 3.2 低侵入原则
+
+要求：
+
+- 不修改应用逻辑；
+- 不影响正常执行；
+- 不改变业务结果。
+
+
+---
+
+## 3.3 多源观测原则
+
+单一Hook存在盲区。
+
+因此采用：
+
+```
+API Level
+
++
+
+Runtime Level
+
++
+
+System Level
+
++
+
+Network Level
+
+```
+
+多层数据融合。
+
+---
+
+# 4. 总体架构
+
+```mermaid
+flowchart TB
+
+
+App["Mobile Application"]
+
+
+Hook["Hook Framework"]
+
+Trace["System Trace"]
+
+Network["Network Monitor"]
+
+UI["UI Behavior Capture"]
+
+Memory["Memory Observation"]
+
+
+Collector["Event Collector"]
+
+Normalizer["Event Normalizer"]
+
+Pipeline["Runtime Event Pipeline"]
+
+
+App --> Hook
+
+App --> Trace
+
+App --> Network
+
+App --> UI
+
+App --> Memory
+
+
+Hook --> Collector
+
+Trace --> Collector
+
+Network --> Collector
+
+UI --> Collector
+
+Memory --> Collector
+
+
+Collector --> Normalizer
+
+Normalizer --> Pipeline
+
+```
+
+---
+
+# 5. Hook Framework
+
+Hook Framework 是 Runtime Instrumentation 的核心组成部分。
+
+目标：
+
+> 捕获应用调用关键系统能力和第三方组件行为。
+
+
+---
+
+# 5.1 Java / Framework Hook
+
+主要针对：
+
+Android Framework。
+
+
+覆盖：
+
+## 隐私相关接口
+
+例如：
+
+```
+LocationManager
+
+CameraManager
+
+AudioRecord
+
+ContactsProvider
+
+TelephonyManager
+
+```
+
+---
+
+## 系统能力接口
+
+例如：
+
+```
+PackageManager
+
+AccessibilityService
+
+NotificationManager
+
+WindowManager
+
+```
+
+---
+
+## 网络接口
+
+例如：
+
+```
+HttpURLConnection
+
+OkHttp
+
+WebView
+
+Socket
+
+```
+
+---
+
+# 5.2 Native Hook
+
+针对：
+
+C/C++代码。
+
+
+采集：
+
+```
+libc
+
+JNI
+
+System Library
+
+```
+
+重点函数：
+
+```
+open()
+
+read()
+
+write()
+
+connect()
+
+send()
+
+recv()
+
+dlopen()
+
+ptrace()
+
+```
+
+用于发现：
+
+- 隐藏文件访问；
+- C2通信；
+- 动态加载；
+- 反调试行为。
+
+
+---
+
+# 5.3 Hook事件输出
+
+统一：
+
+Runtime Event。
+
+
+示例：
+
+```json
+{
+"type":
+
+"api_call",
+
+"module":
+
+"location",
+
+"method":
+
+"getLocation",
+
+"timestamp":
+
+"xxx"
+
+}
+
+```
+
+---
+
+# 6. System Trace
+
+Hook只能看到应用主动调用。
+
+System Trace 用于观察：
+
+> 系统实际发生的行为。
+
+
+---
+
+采集：
+
+## 文件行为
+
+包括：
+
+- 创建文件；
+- 修改文件；
+- 读取敏感目录。
+
+
+---
+
+## 进程行为
+
+包括：
+
+- Process Create；
+- Thread Create；
+- Child Process。
+
+
+---
+
+## 系统调用
+
+包括：
+
+- syscall；
+- IPC；
+- Binder。
+
+
+---
+
+应用场景：
+
+发现：
+
+```
+下载文件
+
+↓
+
+执行
+
+```
+
+等隐藏行为。
+
+---
+
+# 7. Network Monitor
+
+网络监控负责分析：
+
+> 应用与外部环境之间的数据交换。
+
+
+---
+
+# 7.1 网络行为采集
+
+包括：
+
+## DNS
+
+获取：
+
+- 域名；
+- 解析结果。
+
+
+---
+
+## TCP/IP
+
+获取：
+
+- IP；
+- Port；
+- Connection。
+
+
+---
+
+## HTTP/HTTPS
+
+获取：
+
+- URL；
+- Header；
+- 参数；
+- 数据流。
+
+
+---
+
+# 7.2 网络风险分析输入
+
+例如：
+
+行为：
+
+```
+Collect Device ID
+
+        +
+
+Upload Unknown Domain
+
+```
+
+形成：
+
+Privacy Evidence。
+
+---
+
+# 8. UI Behavior Capture
+
+部分安全风险无法通过代码和API判断。
+
+
+例如：
+
+诈骗。
+
+需要理解：
+
+用户看到的内容。
+
+
+---
+
+# 8.1 UI采集能力
+
+包括：
+
+- 页面截图；
+- View Hierarchy；
+- OCR文本；
+- 点击路径。
+
+
+---
+
+# 8.2 UI行为事件
+
+例如：
+
+```json
+{
+"type":
+
+"ui_action",
+
+"action":
+
+"click",
+
+"text":
+
+"立即领取"
+
+}
+
+```
+
+---
+
+应用：
+
+- 涉诈检测；
+- 仿冒检测；
+- 恶意诱导。
+
+
+---
+
+# 9. Memory Observation
+
+用于发现：
+
+运行时隐藏能力。
+
+
+---
+
+# 9.1 动态代码分析
+
+检测：
+
+```
+Encrypted Payload
+
+↓
+
+Memory Decode
+
+↓
+
+Execute
+
+```
+
+---
+
+# 9.2 内存行为
+
+采集：
+
+- Memory Map；
+- Loaded Module；
+- Executable Segment。
+
+
+---
+
+# 10. Runtime Event Pipeline
+
+所有采集数据进入统一流水线。
+
+
+架构：
+
+```
+Collector
+
+↓
+
+Filter
+
+↓
+
+Normalize
+
+↓
+
+Enrichment
+
+↓
+
+Storage
+
+↓
+
+Analysis
+
+```
+
+---
+
+# 10.1 Event Filter
+
+过滤：
+
+- 高频无风险事件；
+- 重复事件；
+- 系统噪声。
+
+
+---
+
+# 10.2 Event Normalize
+
+统一：
+
+Android：
+
+```
+API Event
+
+```
+
+HarmonyOS：
+
+```
+Ark Runtime Event
+
+```
+
+Native：
+
+```
+System Event
+
+```
+
+转换：
+
+统一模型。
+
+---
+
+# 10.3 Event Enrichment
+
+增加：
+
+- App信息；
+- SDK信息；
+- 风险标签；
+- 调用上下文。
+
+
+---
+
+# 11. Runtime Event Model
+
+统一事件结构：
+
+```json
+{
+"event_id":
+
+"xxx",
+
+"application":
+
+"xxx",
+
+"event_type":
+
+"network",
+
+"source":
+
+"SDK",
+
+"timestamp":
+
+"xxx",
+
+"context":
+
+{}
+
+}
+
+```
+
+---
+
+# 12. 对抗能力设计
+
+移动恶意应用可能：
+
+- 检测Hook；
+- 检测模拟器；
+- 延迟执行；
+- 环境识别。
+
+
+因此：
+
+---
+
+## 12.1 多采集路径
+
+例如：
+
+```
+Hook
+
++
+
+System Trace
+
++
+
+Network Observation
+
+```
+
+交叉验证。
+
+---
+
+## 12.2 多环境执行
+
+覆盖：
+
+- 真机；
+- 沙箱；
+- 不同系统版本。
+
+
+---
+
+## 12.3 行为一致性验证
+
+判断：
+
+应用是否因为检测环境改变行为。
+
+---
+
+# 13. 性能设计
+
+运行时采集会产生大量事件。
+
+优化：
+
+---
+
+## 13.1 异步采集
+
+```
+Application Thread
+
+        |
+
+Buffer
+
+        |
+
+Collector
+
+```
+
+避免影响应用。
+
+
+---
+
+## 13.2 分级采集
+
+低风险：
+
+基础采集。
+
+
+高风险：
+
+增强采集。
+
+
+---
+
+## 13.3 数据压缩
+
+包括：
+
+- Event Compression；
+- Duplicate Merge。
+
+
+---
+
+# 14. 技术指标（Metrics）
+
+| 指标 | 目标 |
+|-|-:|
+| Framework API覆盖率 | ≥95% |
+| Native行为覆盖率 | ≥90% |
+| 系统行为采集覆盖率 | ≥95% |
+| 网络行为采集率 | 100% |
+| UI事件采集成功率 | ≥90% |
+| 内存模块识别率 | ≥90% |
+| Event丢失率 | ≤1% |
+| 单事件采集延迟 | ≤10ms |
+| CPU额外开销 | ≤10% |
+
+---
+
+# 15. 本章总结（Summary）
+
+Runtime Instrumentation Framework 是移动应用动态分析体系的基础观测层。
+
+它通过：
+
+```
+Hook
+
++
+
+System Trace
+
++
+
+Network Monitor
+
++
+
+UI Capture
+
++
+
+Memory Observation
+
+```
+
+构建完整运行时行为采集能力。
+
+其输出：
+
+```
+Runtime Event
+
+```
+
+进入 Dynamic Analysis Engine，进一步生成：
+
+```
+Behavior Model
+
+↓
+
+Security Facts
+
+↓
+
+Risk Decision
+
+```
+
+---
+
+## 下一章
+
+**第15章 行为建模引擎（Behavior Modeling Engine）**
+
+下一章将介绍：
+
+- Runtime Event 如何转换为行为；
+- 行为图模型；
+- 应用行为画像；
+- 风险行为模式；
+- 行为聚类；
+- AI辅助行为理解。
