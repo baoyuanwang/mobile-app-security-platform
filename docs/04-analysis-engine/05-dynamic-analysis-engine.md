@@ -19,148 +19,137 @@ last_updated: 2026-07
 
 # 1. 本章目标（Objectives）
 
-动态分析引擎（Dynamic Analysis Engine）是在真实或高度仿真的移动终端环境中，通过运行应用并采集运行过程中的行为数据，识别应用真实安全风险的核心分析能力。
+动态分析引擎（Dynamic Analysis Engine）是移动应用安全检测平台中负责**运行时行为理解与分析**的核心能力。
 
-其核心目标：
+它通过在真实终端或高度仿真的运行环境中执行应用，采集应用运行过程中的行为证据，并结合静态分析结果，对应用实际安全风险进行判断。
 
-> 从应用运行过程中获取真实行为证据，发现静态分析无法覆盖的安全问题。
+动态分析解决的问题：
 
-动态分析关注：
+> 应用在真实运行过程中到底做了什么？
 
-- 应用运行行为；
-- 数据访问行为；
-- 网络通信行为；
-- 系统调用行为；
-- 第三方 SDK 行为；
-- 用户交互行为。
+区别于静态分析：
+
+| 分析方式 | 解决问题 |
+|-|-|
+| 静态分析 | 应用具备什么能力 |
+| 动态分析 | 应用实际执行什么行为 |
 
 ---
 
 # 2. 动态分析定位
 
-动态分析位于 Analysis Engine Layer：
+动态分析属于：
+
+```
+Analysis Engine Layer
+
+        |
+
+Dynamic Analysis Engine
+
+        |
+
+Runtime Behavior Understanding
+
+```
+
+整体关系：
 
 ```mermaid
 flowchart LR
 
+
 Infra["Infrastructure Layer"]
 
-Runtime["Runtime Framework"]
+Runtime["Runtime Environment"]
+
+Instrumentation["Runtime Instrumentation Framework"]
 
 Dynamic["Dynamic Analysis Engine"]
 
-Facts["Security Facts"]
+Behavior["Behavior Modeling"]
 
 Detection["Detection Service"]
 
 
 Infra --> Runtime
 
-Runtime --> Dynamic
+Runtime --> Instrumentation
 
-Dynamic --> Facts
+Instrumentation --> Dynamic
 
-Facts --> Detection
+Dynamic --> Behavior
 
-```
-
-输入：
-
-来自：
-
-- Sandbox Cluster；
-- Device Farm；
-- Runtime Framework。
-
-输出：
-
-统一：
-
-Security Facts。
-
----
-
-# 3. 为什么需要动态分析
-
-静态分析存在天然限制：
-
-## 代码不存在
-
-例如：
-
-服务器动态下发：
-
-```
-Download
-
-↓
-
-Load Module
-
-↓
-
-Execute
-
-```
-
-静态无法看到。
-
----
-
-## 行为由环境决定
-
-例如：
-
-```
-Location = China
-
-↓
-
-展示诈骗页面
+Behavior --> Detection
 
 ```
 
 ---
 
-## 第三方 SDK 动态行为
+# 3. 动态分析核心职责
 
-例如：
+Dynamic Analysis Engine 不负责：
 
-广告 SDK：
+- 单独执行 Hook；
+- 单独采集 API；
+- 单独判断风险。
+
+它负责：
+
+## 3.1 动态任务控制
+
+管理：
+
+- 应用安装；
+- 环境初始化；
+- 执行策略；
+- 自动交互；
+- 数据采集。
+
+
+---
+
+## 3.2 运行证据管理
+
+汇聚：
+
+- API调用；
+- 系统行为；
+- 网络行为；
+- UI行为；
+- 文件行为；
+- 内存行为。
+
+
+---
+
+## 3.3 行为分析
+
+将：
 
 ```
-启动App
+Runtime Event
 
 ↓
 
-请求配置
+Behavior Pattern
 
 ↓
 
-弹窗广告
+Security Fact
+
 ```
 
 ---
 
-## 加固与混淆
+## 3.4 静态动态融合
 
-例如：
+结合：
 
-代码：
+- Static Facts；
+- Runtime Facts；
 
-```
-Encrypted Payload
-```
-
-运行后：
-
-```
-Malicious Logic
-```
-
----
-
-因此必须通过运行时观察。
+形成完整应用行为画像。
 
 ---
 
@@ -170,385 +159,360 @@ Malicious Logic
 flowchart TB
 
 
-App["Application"]
+Application["Mobile Application"]
 
-Runtime["Runtime Environment"]
 
-Hook["Runtime Hook"]
+Environment["Runtime Environment"]
 
-Monitor["Behavior Monitor"]
+Controller["Dynamic Execution Controller"]
 
-Network["Network Analyzer"]
+Instrumentation["Runtime Instrumentation Framework"]
 
-UI["UI Behavior Analyzer"]
+Collector["Runtime Event Collector"]
 
-Memory["Memory Analyzer"]
+Analyzer["Behavior Analyzer"]
 
-Behavior["Behavior Model"]
+Fusion["Static-Dynamic Fusion"]
 
 Facts["Security Facts"]
 
 
-App --> Runtime
 
-Runtime --> Hook
+Application --> Environment
 
-Runtime --> Monitor
+Environment --> Controller
 
-Runtime --> Network
+Controller --> Instrumentation
 
-Runtime --> UI
+Instrumentation --> Collector
 
-Runtime --> Memory
+Collector --> Analyzer
 
+Analyzer --> Fusion
 
-Hook --> Behavior
-
-Monitor --> Behavior
-
-Network --> Behavior
-
-UI --> Behavior
-
-Memory --> Behavior
-
-
-Behavior --> Facts
+Fusion --> Facts
 
 ```
 
 ---
 
-# 5. 动态执行流程
+# 5. Dynamic Execution Controller
 
-标准流程：
+动态执行控制器负责：
 
-```text
-1. Environment Prepare
+> 管理一次完整应用运行生命周期。
 
-        ↓
 
-2. Install Application
+---
 
-        ↓
+## 5.1 生命周期管理
 
-3. Launch Application
 
-        ↓
+流程：
 
-4. Automated Interaction
+```
+Prepare Environment
 
         ↓
 
-5. Runtime Collection
+Install Application
 
         ↓
 
-6. Behavior Analysis
+Launch Application
 
         ↓
 
-7. Generate Security Facts
+Execute Scenario
+
+        ↓
+
+Collect Evidence
+
+        ↓
+
+Terminate
+
+        ↓
+
+Reset Environment
 
 ```
 
 ---
 
-# 6. Runtime Behavior Collection
+# 6. 自动化行为驱动（Automated Interaction）
 
-动态分析核心是：
+应用必须被触发才能产生行为。
 
-> 全面捕获应用运行事实。
+因此需要自动化操作能力。
 
----
-
-# 6.1 API调用监控
-
-监控：
-
-## 系统API
 
 包括：
 
-- Location；
-- Camera；
-- Microphone；
-- Contacts；
-- SMS；
-- Storage；
-- Accessibility。
+## UI探索
+
+例如：
+
+- 页面遍历；
+- 点击；
+- 输入；
+- 滑动。
 
 
 ---
 
-## 网络API
+## 场景模拟
+
+例如：
+
+### 登录场景
+
+```
+打开APP
+
+↓
+
+输入账号
+
+↓
+
+提交
+
+```
+
+---
+
+### 广告场景
+
+```
+启动APP
+
+↓
+
+等待
+
+↓
+
+检测弹窗
+
+```
+
+---
+
+### 涉诈场景
+
+```
+进入页面
+
+↓
+
+触发流程
+
+↓
+
+识别诱导行为
+
+```
+
+---
+
+# 7. Runtime Instrumentation Framework
+
+Runtime Instrumentation 是动态分析的数据采集基础。
+
+它负责：
+
+> 获取应用运行过程中的原始行为事件。
+
 
 包括：
 
-- HTTP；
-- HTTPS；
-- Socket；
-- DNS。
+## 7.1 API Hook
+
+采集：
+
+- Framework API；
+- SDK调用；
+- Native调用。
 
 
 ---
 
-## 系统能力
+## 7.2 System Trace
 
-包括：
-
-- Process；
-- Package；
-- File；
-- Crypto。
-
-
----
-
-# 7. Hook Framework
-
-Hook 是动态分析核心技术。
-
-目标：
-
-在不修改应用代码情况下：
-
-捕获关键行为。
-
----
-
-# 7.1 Hook层级
-
-## Java Framework Hook
-
-监控：
-
-- Android Framework API；
-- SDK调用。
-
-
----
-
-## Native Hook
-
-监控：
-
-- libc；
-- syscall；
-- JNI。
-
-
----
-
-## Kernel / System Layer
-
-监控：
+采集：
 
 - 文件访问；
-- 网络连接；
-- 进程行为。
+- 进程行为；
+- 系统调用。
 
 
 ---
 
-# 7.2 Hook事件模型
+## 7.3 Network Monitor
 
-统一事件：
+采集：
+
+- DNS；
+- IP；
+- HTTP；
+- HTTPS。
+
+
+---
+
+## 7.4 UI Behavior Capture
+
+采集：
+
+- 页面结构；
+- 截图；
+- OCR；
+- 用户操作路径。
+
+
+---
+
+## 7.5 Memory Observation
+
+采集：
+
+- 动态加载；
+- 内存代码；
+- 解密行为。
+
+
+---
+
+# 8. Runtime Event Model
+
+所有采集数据统一转换为：
+
+Runtime Event。
+
+
+示例：
 
 ```json
 {
 "type":
 
-"api_call",
+"network_request",
 
-"process":
+"app":
 
-"app",
+"com.example.app",
 
-"api":
+"destination":
 
-"LocationManager",
+"xxx.com",
 
 "time":
 
 "xxx"
 
 }
+
 ```
 
 ---
 
-# 8. Network Behavior Analysis
+事件类型：
 
-网络行为是风险判断的重要依据。
-
-
-分析：
-
-## 通信对象
-
-包括：
-
-- Domain；
-- IP；
-- ASN；
-- Certificate。
-
+| 类型 | 示例 |
+|-|-|
+| API Event | 调用Camera |
+| Network Event | 上传数据 |
+| File Event | 读取文件 |
+| Process Event | 创建进程 |
+| UI Event | 展示页面 |
+| Memory Event | 加载代码 |
 
 ---
 
-## 通信内容
+# 9. Behavior Analyzer
 
-包括：
+Behavior Analyzer 将低级事件转换为高级行为。
 
-- Header；
-- Payload；
-- Parameter。
-
-
----
-
-## 风险识别
 
 例如：
 
-```
-Collect Device Info
-
-+
-
-Send Unknown Server
+原始事件：
 
 ```
+getDeviceId()
 
-形成：
+HTTPS POST
 
-高风险行为。
-
----
-
-# 9. UI Behavior Analysis
-
-部分风险无法通过API发现。
-
-例如：
-
-诈骗。
-
-需要理解：
-
-用户看到什么。
-
-分析：
-
-- 页面截图；
-- OCR；
-- 页面结构；
-- 点击路径。
-
-
----
-
-示例：
+SDK Process
 
 ```
-打开App
+
+转换：
+
+```
+Device Identifier Collection
 
 ↓
 
-展示公安机关页面
+Third-party SDK Upload
 
-↓
-
-要求转账
-
-```
-
-识别：
-
-涉诈行为。
-
----
-
-# 10. Memory Analysis
-
-针对：
-
-动态加载。
-
-分析：
-
-## 内存区域
-
-包括：
-
-- Heap；
-- Stack；
-- Code Segment。
-
-
----
-
-## 动态模块
-
-发现：
-
-```
-Download
-
-↓
-
-Memory Load
-
-↓
-
-Execute
 ```
 
 ---
 
-# 11. Behavior Graph
+# 10. Behavior Graph
 
-动态行为转换为：
+动态行为形成：
 
 Behavior Graph。
 
 
-例如：
+示例：
 
 ```
-App Start
+Application Start
 
-    |
+        |
 
-Read Device ID
+Read Device Information
 
-    |
+        |
 
-Encrypt
+Encrypt Data
 
-    |
+        |
 
 Upload Server
 
 ```
 
+---
 
-形成：
+行为图节点：
 
-```
-Behavior Chain
+- API；
+- SDK；
+- 页面；
+- 网络目标；
+- 数据对象。
 
-```
+
+边：
+
+- 调用关系；
+- 数据流；
+- 时间关系。
 
 ---
 
-# 12. Static + Dynamic Fusion
+# 11. Static-Dynamic Fusion
 
-动态分析不是独立运行。
+动态分析必须结合静态结果。
 
 
-融合：
+架构：
 
 ```mermaid
 flowchart LR
@@ -556,16 +520,16 @@ flowchart LR
 
 Static["Static Facts"]
 
-Dynamic["Dynamic Facts"]
+Runtime["Runtime Facts"]
 
-Fusion["Behavior Fusion"]
+Fusion["Evidence Fusion"]
 
-Risk["Risk Decision"]
+Risk["Security Decision"]
 
 
 Static --> Fusion
 
-Dynamic --> Fusion
+Runtime --> Fusion
 
 Fusion --> Risk
 
@@ -578,106 +542,198 @@ Fusion --> Risk
 静态：
 
 ```
-has Location API
+包含Location API
 
 ```
 
 动态：
 
 ```
-actual Location Upload
+实际读取GPS
+
++
+
+上传服务器
 
 ```
 
 融合：
 
 ```
-Privacy Violation
+Privacy Risk
 
 ```
 
 ---
 
-# 13. 关键检测能力
+# 12. 动态分析应用场景
 
-## 恶意软件
+---
 
-识别：
+# 12.1 恶意软件检测
 
-- 木马；
-- 信息窃取；
-- C2通信；
-- 动态加载。
+发现：
+
+```
+Download Payload
+
+↓
+
+Dynamic Load
+
+↓
+
+Execute
+
+```
+
+---
+
+# 12.2 隐私违规检测
+
+发现：
+
+```
+Sensitive Data
+
+↓
+
+Collect
+
+↓
+
+Upload
+
+```
+
+---
+
+# 12.3 恶意广告检测
+
+发现：
+
+```
+Background Activity
+
+↓
+
+Popup Window
+
+↓
+
+Auto Click
+
+```
+
+---
+
+# 12.4 涉诈检测
+
+结合：
+
+- UI；
+- OCR；
+- 行为路径。
+
+
+例如：
+
+```
+Fake Government Page
+
+↓
+
+Request Transfer
+
+```
+
+---
+
+# 13. 动态分析抗对抗能力
+
+移动恶意应用可能：
+
+- 检测模拟器；
+- 检测调试；
+- 检测Hook；
+- 延迟执行。
+
+
+因此需要：
+
+---
+
+## 13.1 多环境执行
+
+覆盖：
+
+- 不同设备；
+- 不同系统版本；
+- 不同网络环境。
 
 
 ---
 
-## 隐私违规
+## 13.2 行为触发策略
 
-识别：
+包括：
 
-- 非必要采集；
-- 未授权访问；
-- 数据上传。
-
-
----
-
-## 恶意广告
-
-识别：
-
-- 弹窗；
-- 后台广告；
-- 自动点击。
+- 深度UI探索；
+- 时间控制；
+- 用户行为模拟。
 
 
 ---
 
-## 涉诈
+## 13.3 多源证据融合
 
-识别：
+避免：
 
-- 引导流程；
-- 仿冒页面；
-- 诈骗话术。
-
+单一Hook结果被绕过。
 
 ---
 
-# 14. 动态分析抗对抗能力
+# 14. 性能与规模设计
 
-应用可能检测：
+动态分析通常成本较高。
 
-- 模拟器；
-- Hook；
-- 调试环境。
+需要：
+
+## 分级检测策略
+
+```
+Low Risk
+
+↓
+
+Static Only
 
 
-因此平台需要：
+Medium Risk
 
-## 环境多样性
+↓
 
-多个：
+Sandbox Dynamic
 
-- 设备；
-- 系统；
-- 用户环境。
 
+High Risk
+
+↓
+
+Real Device Dynamic
+
+```
 
 ---
 
-## 行为交叉验证
+## 并行执行
 
-同一应用：
+支持：
 
-多环境执行。
+- 多沙箱节点；
+- 多真机节点；
+- 任务队列调度。
 
----
-
-## 真机补充验证
-
-高风险应用进入 Device Farm。
 
 ---
 
@@ -686,45 +742,66 @@ Privacy Violation
 | 指标 | 目标 |
 |-|-:|
 | 应用启动成功率 | ≥98% |
+| 动态执行成功率 | ≥95% |
 | Runtime行为采集覆盖率 | ≥95% |
-| API Hook覆盖率 | ≥95% |
 | 网络行为采集率 | 100% |
+| UI行为采集覆盖率 | ≥90% |
 | 第三方SDK行为识别率 | ≥95% |
-| 动态分析任务成功率 | ≥98% |
-| 单应用动态执行时间 | ≤15分钟 |
 | 高风险行为发现准确率 | ≥90% |
+| 单应用动态分析时间 | ≤15分钟 |
 
 ---
 
 # 16. 本章总结（Summary）
 
-动态分析引擎通过真实运行应用、采集运行时行为、构建行为模型，实现对移动应用真实安全风险的发现。
+Dynamic Analysis Engine 是移动应用安全检测平台理解应用真实行为的核心分析能力。
 
-它弥补静态分析无法覆盖动态逻辑、服务端控制和运行环境相关行为的问题。
+它通过：
 
-静态分析回答：
+```
+Runtime Environment
 
-> “应用可能做什么。”
+↓
 
-动态分析回答：
+Instrumentation
 
-> “应用实际上做什么。”
+↓
 
-二者共同构成移动应用安全分析平台的核心分析能力。
+Runtime Event
+
+↓
+
+Behavior Modeling
+
+↓
+
+Security Fact
+
+```
+
+形成完整运行时分析链路。
+
+其中：
+
+- Runtime Instrumentation 负责“观察”；
+- Dynamic Analysis Engine 负责“组织和理解”；
+- Detection Service 负责“风险判断”。
+
+三者共同构成移动应用安全检测平台的动态分析体系。
 
 ---
 
 ## 下一章
 
-**第14章 Runtime Hook Framework（运行时Hook框架）**
+**第14章 动态运行时采集框架（Runtime Instrumentation Framework）**
 
-下一章将深入动态分析最核心技术：
+下一章详细展开：
 
-- Hook架构；
-- Java Hook；
-- Native Hook；
-- Kernel级采集；
+- Hook Framework；
+- System Trace；
+- Network Monitor；
+- UI Capture；
+- Memory Observation；
 - Event Pipeline；
-- Hook稳定性；
 - 性能优化；
 - 对抗检测。
