@@ -1,334 +1,231 @@
----
-title: Analysis Engine Overview
-chapter: 9
-part: Analysis Engine Layer
-layer: Analysis Engine Layer
-status: Released
-version: 1.0
-author: MASAP Architecture Team
-last_updated: 2026-07
----
+# 第四章 Analysis Engine Layer（应用分析引擎层）
 
-# 第9章 分析引擎总体架构（Analysis Engine Overview）
+> Chapter 4  
+> Analysis Engine Layer
 
-> **Chapter 9**
->
-> **Analysis Engine Overview**
+版本：V1.0
 
 ---
 
-# 1. 本章目标（Objectives）
+# 1. 本章概述
 
-分析引擎层（Analysis Engine Layer）是移动应用安全检测平台的核心技术层。
+Analysis Engine Layer 是移动应用安全检测平台的核心分析能力层。
 
-其核心目标是：
+该层负责对开发者提交的移动应用程序进行深度分析，通过静态分析、动态分析等技术手段，提取应用程序代码、资源、运行时行为、网络通信、系统调用等安全相关信息，形成标准化的应用分析结果（Analysis Result），提供给上层 Detection Service Layer 进行业务风险判断。
 
-> 将移动应用从一个不可理解的软件包，转换为结构化、可计算、可关联的安全事实（Security Facts）。
+本层的核心目标：
 
-分析引擎负责连接：
-
-- 应用二进制文件；
-- 程序结构；
-- 代码行为；
-- 运行时行为；
-- AI 分析模型；
-- 安全检测服务。
-
-本章介绍：
-
-- 分析引擎建设目标；
-- 总体架构；
-- 分析流水线；
-- 核心组件；
-- 数据模型；
-- 与上下层关系。
+> **回答“应用做了什么”，而不是判断“应用是否违规”。**
 
 ---
 
-# 2. 为什么需要统一分析引擎（Motivation）
+# 2. Analysis Engine Layer 定位
 
-移动应用安全检测面对的对象并不是简单文件，而是复杂的软件系统。
-
-一个移动应用通常包含：
-
-- Java/Kotlin 代码；
-- Native C/C++代码；
-- 第三方 SDK；
-- 动态加载模块；
-- 加密代码；
-- 网络通信逻辑；
-- 用户交互逻辑；
-- 服务端动态配置。
-
-传统检测方式：
+整体架构：
 
 ```
-规则扫描
-+
-黑名单匹配
+Application Package
+
+        |
+        |
+        ▼
+
+Analysis Engine Layer
+
+        |
+        |
+        ▼
+
+Analysis Result
+
+        |
+        |
+        ▼
+
+Detection Service Layer
+
+        |
+        |
+        ▼
+
+Risk Decision
 ```
 
-无法覆盖复杂风险。
+---
+
+Analysis Engine Layer 与 Detection Service Layer 的职责边界：
+
+|模块|职责|
+|-|-|
+|Analysis Engine|发现、采集、分析应用行为|
+|Detection Service|基于业务规则判断安全风险|
 
 例如：
 
-## 场景1：恶意 SDK
-
-静态扫描发现：
+Analysis Engine 输出：
 
 ```
-SDK_xxx.so
+Application accessed location data
+
+Application uploaded data
+
+Application loaded dynamic code
+
+Application displayed overlay window
 ```
 
-但无法判断：
+Detection Service 判断：
 
-运行时是否：
+```
+Privacy Violation
 
-- 收集设备信息；
-- 上传用户数据；
-- 下载远程代码。
+Malware
+
+Malicious Advertisement
+
+Fraud Risk
+```
 
 ---
 
-## 场景2：动态广告
+# 3. 总体架构
 
-代码中没有明显广告逻辑。
-
-但运行后：
+Analysis Engine Layer 采用双流水线架构：
 
 ```
-启动App
+                         APK/HAP
 
-↓
-
-访问服务器
-
-↓
-
-返回广告策略
-
-↓
-
-弹窗
-```
-
-必须结合：
-
-静态分析 + 动态分析。
-
----
-
-## 场景3：涉诈应用
-
-代码可能完全正常。
-
-但是：
-
-运行流程：
-
-```
-打开App
-
-↓
-
-诱导登录
-
-↓
-
-伪造页面
-
-↓
-
-诱导转账
-```
-
-必须理解：
-
-代码、
-
-界面、
-
-网络、
-
-行为。
-
----
-
-因此平台需要统一分析引擎。
-
----
-
-# 3. 分析引擎总体架构
-
-```mermaid
-flowchart TB
+                            |
+              +-------------+-------------+
+              |                           |
+              ▼                           ▼
 
 
-APP["Mobile Application"]
-
-Parser["Package Parser"]
-
-IR["Program Representation"]
-
-Static["Static Analysis Engine"]
-
-Dynamic["Dynamic Analysis Engine"]
-
-Hook["Runtime Hook Engine"]
-
-Behavior["Behavior Modeling"]
-
-Facts["Security Facts"]
-
-Knowledge["Security Knowledge Platform"]
+      Static Analysis Pipeline     Dynamic Analysis Pipeline
 
 
-APP --> Parser
+              |                           |
+              |                           |
+              ▼                           ▼
 
-Parser --> IR
 
-IR --> Static
+       Static Analysis Result      Dynamic Analysis Result
 
-IR --> Dynamic
 
-Dynamic --> Hook
+              +-------------+-------------+
 
-Static --> Behavior
+                            |
+                            ▼
 
-Hook --> Behavior
 
-Behavior --> Facts
+                Analysis Result Management
 
-Facts --> Knowledge
+
+                            |
+                            ▼
+
+
+                 Unified Analysis Result
 
 ```
 
 ---
 
-# 4. 分析流水线（Analysis Pipeline）
+# 4. Static Analysis Engine（静态分析引擎）
 
-整个分析流程：
+## 4.1 功能定位
 
-```mermaid
-flowchart LR
+Static Analysis Engine 在不运行应用的情况下，对应用安装包、代码、配置文件、依赖组件等进行分析。
 
-A[Application Package]
+主要目标：
 
--->
-
-B[Parsing]
-
--->
-
-C[Program Model]
-
--->
-
-D[Static Analysis]
-
--->
-
-E[Dynamic Analysis]
-
--->
-
-F[Behavior Modeling]
-
--->
-
-G[Security Facts]
-
-```
+- 理解应用程序结构；
+- 发现潜在风险能力；
+- 提取代码级安全证据。
 
 ---
 
-# 5. 核心组件
-
-分析引擎由以下模块组成：
-
-| 模块 | 职责 |
-|-|-|
-| Package Parser | 应用包解析 |
-| Program Representation | 程序统一表示 |
-| Static Analysis Engine | 静态程序分析 |
-| Dynamic Analysis Engine | 动态行为分析 |
-| Runtime Hook Engine | 运行时采集 |
-| Behavior Modeling | 行为建模 |
-| Fact Generator | 安全事实生成 |
-
----
-
-# 6. Package Parser（应用解析）
-
-Package Parser 是分析入口。
+# 4.2 输入对象
 
 支持：
 
-## Android
+- Android APK
+- Android AAB
+- HarmonyOS HAP
+- 应用资源文件
+- Manifest配置
+- 签名文件
+- 第三方SDK
 
-包括：
-
-- APK
-- AAB
-- DEX
-- ELF
-- SO
-- Manifest
 
 ---
 
-## HarmonyOS
-
-包括：
-
-- HAP
-- ABC Bytecode
-- Ark Runtime Metadata
-
----
-
-解析内容：
-
-## 应用元信息
-
-- Package Name
-- Version
-- Signature
-- Certificate
-- Permission
-
----
-
-## 代码结构
-
-包括：
-
-- Class
-- Method
-- Function
-- Dependency
-
----
-
-## 资源信息
-
-包括：
-
-- XML
-- Image
-- String
-- Configuration
-
----
-
-# 7. Program Representation（程序统一表示）
-
-不同平台：
-
-Android：
+# 4.3 Static Analysis Pipeline
 
 ```
-Java/Kotlin
+Application Package
+
+        |
+        ▼
+
+Package Parser
+
+        |
+        ▼
+
+Program Representation
+
+        |
+        +----------------+
+        |                |
+        ▼                ▼
+
+Control Flow      Data Flow
+
+Analysis          Analysis
+
+
+        |
+        ▼
+
+Security Analysis
+
+        |
+        ▼
+
+Static Result
+
+```
+
+---
+
+# 5. Program Representation（程序表示）
+
+## 5.1 定位
+
+Program Representation 是 Static Analysis Engine 的核心基础能力。
+
+它负责将应用代码转换为适合程序分析的中间表示（Intermediate Representation）。
+
+---
+
+# 5.2 为什么需要 Program Representation
+
+移动应用代码通常包含：
+
+- Java/Kotlin代码；
+- Smali代码；
+- Native代码；
+- 动态加载代码；
+- 混淆代码。
+
+
+直接分析源代码困难。
+
+因此需要转换：
+
+```
+APK
 
 ↓
 
@@ -336,353 +233,588 @@ DEX
 
 ↓
 
-ART Runtime
-```
-
-HarmonyOS：
-
-```
-ArkTS
+IR
 
 ↓
 
-ABC Bytecode
+CFG
 
 ↓
 
-Ark Runtime
+Call Graph
+
+↓
+
+Data Flow Graph
+
 ```
 
-平台需要统一抽象。
+形成统一程序模型。
 
-因此设计：
+---
 
-## Mobile Application IR
+# 5.3 核心能力
 
-（Intermediate Representation）
+## Control Flow Graph（CFG）
 
-统一表示：
+描述：
 
-```text
+程序执行路径。
+
+
+用于：
+
+- 路径分析；
+- 可达性分析；
+- 恶意代码定位。
+
+
+---
+
+## Call Graph
+
+描述：
+
+函数调用关系。
+
+
+用于：
+
+- API调用追踪；
+- SDK分析；
+- 风险函数定位。
+
+
+---
+
+## Data Flow Graph（DFG）
+
+描述：
+
+数据传播路径。
+
+
+用于：
+
+- 敏感数据流分析；
+- 隐私泄露分析。
+
+
+---
+
+## Taint Analysis
+
+描述：
+
+敏感数据传播。
+
+
+例如：
+
+```
+IMEI
+
+↓
+
+Variable
+
+↓
+
+Network API
+
+↓
+
+Server
+
+```
+
+---
+
+# 5.4 Static Analysis输出
+
+输出：
+
+Static Analysis Result。
+
+
+示例：
+
+```json
+{
+"type":"static",
+
+"finding":[
+
+{
+"category":"permission",
+"value":"READ_CONTACTS"
+},
+
+{
+"category":"sdk",
+"value":"xxx_sdk"
+},
+
+{
+"category":"dynamic_load",
+"value":"DexClassLoader"
+}
+
+]
+
+}
+```
+
+---
+
+# 6. Dynamic Analysis Engine（动态分析引擎）
+
+## 6.1 功能定位
+
+Dynamic Analysis Engine 通过在真实设备或模拟环境运行应用，捕获应用运行过程中的真实行为。
+
+核心目标：
+
+> 发现静态分析无法确认的运行时行为。
+
+---
+
+# 6.2 输入
+
+```
+APK/HAP
+
++
+
+Runtime Environment
+
+```
+
+运行环境包括：
+
+- 真机；
+- 沙箱；
+- 云手机环境。
+
+
+---
+
+# 6.3 Dynamic Analysis Pipeline
+
+```
 Application
 
-├── Component
+      |
+      ▼
 
-├── Class
+Runtime Environment
 
-├── Method
+      |
+      ▼
 
-├── Function
+Runtime Instrumentation
 
-├── Call Graph
+      |
+      ▼
 
-├── Data Flow
+Runtime Event Collection
 
-├── Resource
+      |
+      ▼
 
-└── Permission
+Behavior Reconstruction
+
+      |
+      ▼
+
+Dynamic Analysis Result
+
 ```
 
 ---
 
-# 8. Static Analysis Engine
+# 7. Runtime Instrumentation Framework（运行时插桩框架）
 
-静态分析负责：
+## 7.1 定位
 
-> 不运行应用，理解应用内部结构和潜在风险。
+Runtime Instrumentation Framework 是动态检测的数据采集基础。
 
+负责：
 
-能力包括：
-
-## Code Analysis
-
-- 控制流分析（CFG）
-- 调用图分析（CG）
-- 数据流分析（DFG）
-
-
-## Permission Analysis
-
-分析：
-
-- 权限申请；
-- 权限使用；
-- 权限传播。
-
-
-## SDK Analysis
-
-识别：
-
-- 第三方 SDK；
-- SDK 版本；
-- SDK 行为。
-
-
-## Malware Feature Extraction
-
-提取：
-
-- API调用；
-- 字符串；
-- 加密行为；
-- 网络地址。
+> 在应用运行过程中获取关键运行行为。
 
 ---
 
-# 9. Dynamic Analysis Engine
-
-动态分析负责：
-
-> 观察应用真实运行行为。
-
-输入来自：
-
-Infrastructure Layer。
+# 7.2 核心技术
 
 包括：
 
-- Runtime Log
-- Hook Event
-- Network Traffic
-- Screenshot
+## Java / Android Framework Hook
 
+监控：
 
-分析：
-
-## Runtime Behavior
-
-例如：
-
-```
-App
-
-↓
-
-读取联系人
-
-↓
-
-访问服务器
-
-↓
-
-上传数据
-```
+- API调用；
+- 权限访问；
+- 文件访问。
 
 
 ---
 
-# 10. Behavior Modeling
+## ART Runtime Instrumentation
 
-将原始事件转换为行为模型。
+监控：
 
-例如：
+- 方法调用；
+- 参数；
+- 返回值。
+
+
+---
+
+## Native Layer Instrumentation
+
+监控：
+
+- JNI调用；
+- Native函数。
+
+
+---
+
+## Network Instrumentation
+
+监控：
+
+- HTTP/HTTPS；
+- DNS；
+- Socket。
+
+
+---
+
+# 7.3 Runtime Event
+
+采集：
+
+```
+API Call
+
+File Access
+
+Network Request
+
+Permission Usage
+
+Process Behavior
+
+UI Event
+
+Memory Behavior
+
+```
+
+---
+
+# 8. Behavior Reconstruction（行为重建）
+
+## 8.1 定位
+
+Behavior Reconstruction 是 Dynamic Analysis Engine 的后处理能力。
+
+负责：
+
+将大量离散 Runtime Event 转换为连续行为描述。
+
+---
+
+# 8.2 为什么需要
 
 原始事件：
 
 ```
-getLocation()
+Location API
 
-connect(ip)
+Network API
 
-send(data)
+SDK Call
+
 ```
 
+无法直接表达业务行为。
 
-转换：
+
+经过重建：
+
+```
+Application collected location data
+
+and transmitted it externally
+
+```
+
+---
+
+# 8.3 行为重建能力
+
+包括：
+
+## Event Correlation
+
+事件关联。
+
+
+例如：
+
+```
+Read Contact
+
++
+
+HTTP Upload
+
+```
+
+---
+
+## Execution Trace Reconstruction
+
+恢复执行路径。
+
+
+例如：
+
+```
+Login
+
+↓
+
+Permission Request
+
+↓
+
+Data Upload
+
+```
+
+---
+
+## Behavior Sequence Analysis
+
+分析行为序列。
+
+
+---
+
+# 8.4 Dynamic Analysis Result
+
+示例：
+
+```json
+{
+"type":"dynamic",
+
+"behavior":[
+
+{
+"action":"collect",
+
+"object":"location"
+},
+
+{
+"action":"upload",
+
+"destination":"xxx.com"
+}
+
+]
+
+}
+```
+
+---
+
+# 9. Analysis Result Management
+
+## 9.1 定位
+
+负责管理静态分析和动态分析输出结果。
+
+核心能力：
+
+- 结果汇聚；
+- 数据标准化；
+- 结果存储；
+- 查询服务。
+
+
+---
+
+# 9.2 Result Model
+
+统一模型：
+
+```
+Analysis Result
+
+├── Static Result
+
+├── Dynamic Result
+
+├── Runtime Trace
+
+├── Network Evidence
+
+├── Screenshot
+
+├── File Evidence
+
+└── Metadata
+
+```
+
+---
+
+# 10. 与 Detection Service Layer 的关系
+
+Analysis Engine 输出：
+
+```
+Analysis Result
+```
+
+Detection Service 消费：
+
+```
+Analysis Result
+```
+
+例如：
+
+---
+
+## 隐私检测
+
+输入：
 
 ```
 Location Collection
 
 +
 
-Remote Communication
+Network Upload
 
-+
-
-Data Upload
 ```
 
-形成：
+判断：
 
-Behavior Graph。
+```
+Privacy Violation
+```
 
 ---
 
-# 11. Security Facts
-
-分析引擎最终输出：
-
-Security Facts。
-
-这是整个系统的重要数据标准。
-
-示例：
-
-```json
-{
-"type":"privacy_behavior",
-
-"source":"location",
-
-"api":"LocationManager",
-
-"destination":"xxx.com",
-
-"risk":"high"
-}
-```
-
-Security Facts 被：
-
-- Detection Service
-- AI Engine
-- Knowledge Platform
-
-共同消费。
-
----
-
-# 12. 与其他层关系
-
-## 与 Infrastructure Layer
+## 恶意广告检测
 
 输入：
 
 ```
-Runtime Data
+Overlay Window
+
++
+
+Auto Click
+
++
+
+Background Launch
+
 ```
 
-输出：
+判断：
 
 ```
-Behavior Facts
+Malicious Advertisement
 ```
-
 
 ---
 
-## 与 AI Intelligence Layer
+## 木马检测
 
-AI 提供：
+输入：
 
-- 分类；
-- 推理；
-- 相似分析。
+```
+Dynamic Loading
 
++
+
+Remote Download
+
++
+
+Execution
+
+```
+
+判断：
+
+```
+Malware Risk
+```
 
 ---
 
-## 与 Detection Service Layer
+# 11. 技术指标
 
-检测服务消费：
+|能力|指标|
+|-|-:|
+|APK解析成功率|≥99%|
+|DEX解析覆盖率|≥95%|
+|静态代码分析覆盖率|≥90%|
+|动态行为采集覆盖率|≥95%|
+|Runtime API监控覆盖率|≥95%|
+|网络行为采集覆盖率|100%|
+|行为重建准确率|≥90%|
+|单应用分析时间|≤15分钟|
+
+---
+
+# 12. 本章总结
+
+Analysis Engine Layer 是移动应用安全检测平台的核心技术基础。
+
+通过：
 
 ```
-Security Facts
+Static Analysis
+
++
+
+Dynamic Analysis
+
+↓
+
+Analysis Result
+
 ```
 
-进行：
+完成应用安全信号采集。
+
+其中：
+
+- Static Analysis 负责理解程序结构；
+- Dynamic Analysis 负责观察运行行为；
+- Program Representation 支撑静态程序分析；
+- Runtime Instrumentation 支撑动态行为采集；
+- Behavior Reconstruction 提升动态结果语义化能力。
+
+最终输出标准化 Analysis Result，供 Detection Service Layer 完成：
 
 - 恶意软件检测；
-- 隐私检测；
-- 涉诈检测。
-
----
-
-# 13. 关键设计原则
-
-## 13.1 Analyze Once, Use Everywhere
-
-应用解析一次。
-
-所有检测共享分析结果。
-
-
----
-
-## 13.2 Static + Dynamic Fusion
-
-静态：
-
-回答：
-
-> 应用具有什么能力？
-
-动态：
-
-回答：
-
-> 应用实际做了什么？
-
-
----
-
-## 13.3 Fact-Oriented Architecture
-
-不直接输出检测结果。
-
-输出：
+- 隐私合规检测；
+- 恶意广告检测；
+- 涉诈检测；
+- 内容安全检测；
+- 仿冒侵权检测。
 
 ```
-事实
-
-↓
-
-检测规则
-
-↓
-
-风险判断
-```
-
----
-
-## 13.4 Platform Independent
-
-支持：
-
-- Android
-- HarmonyOS
-
-统一分析模型。
-
----
-
-# 14. 技术指标（Metrics）
-
-| 指标 | 目标 |
-|-|-:|
-| APK/HAP解析成功率 | ≥99% |
-| Manifest解析覆盖率 | 100% |
-| Native库识别率 | ≥95% |
-| 第三方SDK识别率 | ≥95% |
-| 静态分析覆盖率 | ≥90% |
-| 动态行为采集覆盖率 | ≥95% |
-| Security Facts生成成功率 | ≥99% |
-| 单应用分析时间 | ≤15分钟 |
-
----
-
-# 15. 本章总结（Summary）
-
-分析引擎层是移动应用安全检测平台的核心技术中枢。
-
-通过统一应用解析、程序表示、静态分析、动态分析、行为建模和安全事实生成能力，平台能够将复杂移动应用转换为结构化安全数据。
-
-该层向上支撑 AI Intelligence Layer 和 Detection Service Layer，向下连接 Infrastructure Layer，是整个安全检测体系的核心分析能力。
-
----
-
-## 下一章
-
-**第10章 应用包解析引擎（Package Parser）**
-
-下一章将深入介绍：
-
-- APK/HAP 文件结构解析；
-- DEX/ABC/ELF 分析；
-- Manifest 解析；
-- 签名解析；
-- 资源解析；
-- 程序中间模型构建。
