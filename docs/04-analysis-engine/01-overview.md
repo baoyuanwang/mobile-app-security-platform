@@ -3,80 +3,263 @@
 > Chapter 4  
 > Analysis Engine Layer
 
-版本：V1.0
-
 ---
 
-# 1. 本章概述
+## 1. 本章概述
 
 Analysis Engine Layer 是移动应用安全检测平台的核心分析能力层。
 
-该层负责对开发者提交的移动应用程序进行深度分析，通过静态分析、动态分析等技术手段，提取应用程序代码、资源、运行时行为、网络通信、系统调用等安全相关信息，形成标准化的应用分析结果（Analysis Result），提供给上层 Detection Service Layer 进行业务风险判断。
+该层负责对移动应用进行程序分析和运行时分析，提取应用程序的结构信息、代码特征、运行行为以及安全证据，为上层 Detection Service Layer 提供统一、标准化的 Analysis Result。
 
-本层的核心目标：
+Analysis Engine 不直接判断应用是否违规，而是回答：
 
-> **回答“应用做了什么”，而不是判断“应用是否违规”。**
+> **应用包含什么？应用运行过程中做了什么？**
+
+安全风险判定、业务规则匹配、AI 推理等能力均属于 Detection Service Layer。
+
+因此，Analysis Engine 是整个检测平台的数据生产者（Producer），Detection Service 是分析结果的消费者（Consumer）。
 
 ---
 
-# 2. Analysis Engine Layer 定位
+## 2. 在整体架构中的位置
 
-整体架构：
+```text
+                         Mobile Application
 
+                                │
+                                ▼
+
+                 Analysis Engine Layer（Chapter 4）
+
+     ┌────────────────────────────────────────────┐
+     │                                            │
+     │  Package Parser                            │
+     │                                            │
+     │  Static Analysis Engine                    │
+     │                                            │
+     │  Dynamic Analysis Engine                   │
+     │                                            │
+     │  Analysis Result Management                │
+     │                                            │
+     └────────────────────────────────────────────┘
+
+                                │
+                                ▼
+
+                    Unified Analysis Result
+
+                                │
+                                ▼
+
+                Detection Service Layer（Chapter 5）
+
+                                │
+                                ▼
+
+                         Risk Decision
 ```
-Application Package
 
-        |
-        |
-        ▼
+Analysis Engine 与 Detection Service 之间采用统一的数据契约（Analysis Result）进行解耦。
 
-Analysis Engine Layer
+这种设计使分析能力和业务能力能够独立演进：
 
-        |
-        |
-        ▼
+- 新增分析能力时，不影响检测规则；
+- 新增检测服务时，不需要修改分析引擎；
+- AI 模型升级时，不影响底层分析流程。
 
+---
+
+## 3. 核心设计原则
+
+### 3.1 分析与检测分离
+
+Analysis Engine：
+
+负责发现事实（Fact Discovery）。
+
+包括：
+
+- 应用结构解析；
+- 程序分析；
+- API 调用分析；
+- 数据流分析；
+- 运行行为采集；
+- 网络行为采集；
+- 系统调用分析。
+
+输出：
+
+```text
 Analysis Result
+```
 
-        |
-        |
-        ▼
+Detection Service：
 
-Detection Service Layer
+负责业务判断（Risk Decision）。
 
-        |
-        |
-        ▼
+包括：
 
+- 恶意软件检测；
+- 隐私违规检测；
+- 内容安全检测；
+- 恶意广告检测；
+- 涉诈检测；
+- 仿冒侵权检测。
+
+输出：
+
+```text
 Risk Decision
 ```
 
 ---
 
-Analysis Engine Layer 与 Detection Service Layer 的职责边界：
+### 3.2 静态分析与动态分析并行
 
-|模块|职责|
-|-|-|
-|Analysis Engine|发现、采集、分析应用行为|
-|Detection Service|基于业务规则判断安全风险|
+静态分析与动态分析互相独立。
 
-例如：
+两条分析流水线不存在依赖关系。
+
+```text
+                  Application Package
+
+                         │
+          ┌──────────────┴──────────────┐
+          ▼                             ▼
+
+ Static Analysis Engine         Dynamic Analysis Engine
+
+          ▼                             ▼
+
+ Static Analysis Result        Dynamic Analysis Result
+
+          └──────────────┬──────────────┘
+                         ▼
+
+             Analysis Result Management
+
+                         ▼
+
+               Unified Analysis Result
+```
+
+静态分析主要回答：
+
+> 应用代码中可能存在什么能力？
+
+动态分析主要回答：
+
+> 应用运行时实际执行了什么行为？
+
+两类分析结果最终统一汇聚，由上层 Detection Service 综合判断。
+
+---
+
+### 3.3 分层解耦
+
+Analysis Engine 内部进一步划分为四个组件：
+
+| 组件 | 职责 |
+|------|------|
+| Package Parser | 解析应用安装包及元数据 |
+| Static Analysis Engine | 程序静态分析 |
+| Dynamic Analysis Engine | 应用运行分析 |
+| Analysis Result Management | 分析结果统一管理 |
+
+各组件职责清晰、接口稳定，可独立演进。
+
+---
+
+## 4. Analysis Engine 内部架构
+
+```text
+Analysis Engine Layer
+
+├── Package Parser
+│
+├── Static Analysis Engine
+│      ├── Program Representation
+│      ├── Control Flow Analysis
+│      ├── Data Flow Analysis
+│      ├── Call Graph Analysis
+│      ├── Taint Analysis
+│      ├── SDK Analysis
+│      └── Static Analysis Result
+│
+├── Dynamic Analysis Engine
+│      ├── Runtime Instrumentation Framework
+│      ├── Runtime Event Collection
+│      ├── Network Behavior Analysis
+│      ├── Behavior Reconstruction
+│      └── Dynamic Analysis Result
+│
+└── Analysis Result Management
+```
+
+需要注意：
+
+Program Representation、Taint Analysis 等并不是独立模块，而是 Static Analysis Engine 的内部技术能力。
+
+同样，Runtime Instrumentation、Behavior Reconstruction 也是 Dynamic Analysis Engine 的内部组成部分。
+
+---
+
+## 5. 数据流
+
+Analysis Engine 的整体数据流如下：
+
+```text
+          Application Package
+
+                  │
+
+                  ▼
+
+          Package Parser
+
+                  │
+
+     ┌────────────┴────────────┐
+     ▼                         ▼
+
+Static Analysis         Dynamic Analysis
+
+     ▼                         ▼
+
+Static Result           Dynamic Result
+
+      └────────────┬────────────┘
+
+                   ▼
+
+      Analysis Result Management
+
+                   ▼
+
+      Unified Analysis Result
+```
+
+整个过程中不进行业务风险判断，仅输出标准化分析结果。
+
+---
+
+## 6. 与 Detection Service 的关系
 
 Analysis Engine 输出：
 
-```
-Application accessed location data
+```text
+Application accesses contacts
 
-Application uploaded data
+Application uploads location
 
-Application loaded dynamic code
+Application loads external dex
 
-Application displayed overlay window
+Application opens overlay window
 ```
 
 Detection Service 判断：
 
-```
+```text
 Privacy Violation
 
 Malware
@@ -86,735 +269,24 @@ Malicious Advertisement
 Fraud Risk
 ```
 
----
+因此：
 
-# 3. 总体架构
+- Analysis Engine 负责采集事实；
+- Detection Service 负责解释事实。
 
-Analysis Engine Layer 采用双流水线架构：
-
-```
-                         APK/HAP
-
-                            |
-              +-------------+-------------+
-              |                           |
-              ▼                           ▼
-
-
-      Static Analysis Pipeline     Dynamic Analysis Pipeline
-
-
-              |                           |
-              |                           |
-              ▼                           ▼
-
-
-       Static Analysis Result      Dynamic Analysis Result
-
-
-              +-------------+-------------+
-
-                            |
-                            ▼
-
-
-                Analysis Result Management
-
-
-                            |
-                            ▼
-
-
-                 Unified Analysis Result
-
-```
+这是平台可扩展性的核心设计原则。
 
 ---
 
-# 4. Static Analysis Engine（静态分析引擎）
+## 7. 本章组成
 
-## 4.1 功能定位
+本章由以下四个模块组成：
 
-Static Analysis Engine 在不运行应用的情况下，对应用安装包、代码、配置文件、依赖组件等进行分析。
+| 文件 | 内容 |
+|------|------|
+| 01-package-parser.md | 应用包解析组件 |
+| 02-static-analysis-engine.md | 静态分析引擎 |
+| 03-dynamic-analysis-engine.md | 动态分析引擎 |
+| 04-analysis-result-management.md | 分析结果管理 |
 
-主要目标：
-
-- 理解应用程序结构；
-- 发现潜在风险能力；
-- 提取代码级安全证据。
-
----
-
-# 4.2 输入对象
-
-支持：
-
-- Android APK
-- Android AAB
-- HarmonyOS HAP
-- 应用资源文件
-- Manifest配置
-- 签名文件
-- 第三方SDK
-
-
----
-
-# 4.3 Static Analysis Pipeline
-
-```
-Application Package
-
-        |
-        ▼
-
-Package Parser
-
-        |
-        ▼
-
-Program Representation
-
-        |
-        +----------------+
-        |                |
-        ▼                ▼
-
-Control Flow      Data Flow
-
-Analysis          Analysis
-
-
-        |
-        ▼
-
-Security Analysis
-
-        |
-        ▼
-
-Static Result
-
-```
-
----
-
-# 5. Program Representation（程序表示）
-
-## 5.1 定位
-
-Program Representation 是 Static Analysis Engine 的核心基础能力。
-
-它负责将应用代码转换为适合程序分析的中间表示（Intermediate Representation）。
-
----
-
-# 5.2 为什么需要 Program Representation
-
-移动应用代码通常包含：
-
-- Java/Kotlin代码；
-- Smali代码；
-- Native代码；
-- 动态加载代码；
-- 混淆代码。
-
-
-直接分析源代码困难。
-
-因此需要转换：
-
-```
-APK
-
-↓
-
-DEX
-
-↓
-
-IR
-
-↓
-
-CFG
-
-↓
-
-Call Graph
-
-↓
-
-Data Flow Graph
-
-```
-
-形成统一程序模型。
-
----
-
-# 5.3 核心能力
-
-## Control Flow Graph（CFG）
-
-描述：
-
-程序执行路径。
-
-
-用于：
-
-- 路径分析；
-- 可达性分析；
-- 恶意代码定位。
-
-
----
-
-## Call Graph
-
-描述：
-
-函数调用关系。
-
-
-用于：
-
-- API调用追踪；
-- SDK分析；
-- 风险函数定位。
-
-
----
-
-## Data Flow Graph（DFG）
-
-描述：
-
-数据传播路径。
-
-
-用于：
-
-- 敏感数据流分析；
-- 隐私泄露分析。
-
-
----
-
-## Taint Analysis
-
-描述：
-
-敏感数据传播。
-
-
-例如：
-
-```
-IMEI
-
-↓
-
-Variable
-
-↓
-
-Network API
-
-↓
-
-Server
-
-```
-
----
-
-# 5.4 Static Analysis输出
-
-输出：
-
-Static Analysis Result。
-
-
-示例：
-
-```json
-{
-"type":"static",
-
-"finding":[
-
-{
-"category":"permission",
-"value":"READ_CONTACTS"
-},
-
-{
-"category":"sdk",
-"value":"xxx_sdk"
-},
-
-{
-"category":"dynamic_load",
-"value":"DexClassLoader"
-}
-
-]
-
-}
-```
-
----
-
-# 6. Dynamic Analysis Engine（动态分析引擎）
-
-## 6.1 功能定位
-
-Dynamic Analysis Engine 通过在真实设备或模拟环境运行应用，捕获应用运行过程中的真实行为。
-
-核心目标：
-
-> 发现静态分析无法确认的运行时行为。
-
----
-
-# 6.2 输入
-
-```
-APK/HAP
-
-+
-
-Runtime Environment
-
-```
-
-运行环境包括：
-
-- 真机；
-- 沙箱；
-- 云手机环境。
-
-
----
-
-# 6.3 Dynamic Analysis Pipeline
-
-```
-Application
-
-      |
-      ▼
-
-Runtime Environment
-
-      |
-      ▼
-
-Runtime Instrumentation
-
-      |
-      ▼
-
-Runtime Event Collection
-
-      |
-      ▼
-
-Behavior Reconstruction
-
-      |
-      ▼
-
-Dynamic Analysis Result
-
-```
-
----
-
-# 7. Runtime Instrumentation Framework（运行时插桩框架）
-
-## 7.1 定位
-
-Runtime Instrumentation Framework 是动态检测的数据采集基础。
-
-负责：
-
-> 在应用运行过程中获取关键运行行为。
-
----
-
-# 7.2 核心技术
-
-包括：
-
-## Java / Android Framework Hook
-
-监控：
-
-- API调用；
-- 权限访问；
-- 文件访问。
-
-
----
-
-## ART Runtime Instrumentation
-
-监控：
-
-- 方法调用；
-- 参数；
-- 返回值。
-
-
----
-
-## Native Layer Instrumentation
-
-监控：
-
-- JNI调用；
-- Native函数。
-
-
----
-
-## Network Instrumentation
-
-监控：
-
-- HTTP/HTTPS；
-- DNS；
-- Socket。
-
-
----
-
-# 7.3 Runtime Event
-
-采集：
-
-```
-API Call
-
-File Access
-
-Network Request
-
-Permission Usage
-
-Process Behavior
-
-UI Event
-
-Memory Behavior
-
-```
-
----
-
-# 8. Behavior Reconstruction（行为重建）
-
-## 8.1 定位
-
-Behavior Reconstruction 是 Dynamic Analysis Engine 的后处理能力。
-
-负责：
-
-将大量离散 Runtime Event 转换为连续行为描述。
-
----
-
-# 8.2 为什么需要
-
-原始事件：
-
-```
-Location API
-
-Network API
-
-SDK Call
-
-```
-
-无法直接表达业务行为。
-
-
-经过重建：
-
-```
-Application collected location data
-
-and transmitted it externally
-
-```
-
----
-
-# 8.3 行为重建能力
-
-包括：
-
-## Event Correlation
-
-事件关联。
-
-
-例如：
-
-```
-Read Contact
-
-+
-
-HTTP Upload
-
-```
-
----
-
-## Execution Trace Reconstruction
-
-恢复执行路径。
-
-
-例如：
-
-```
-Login
-
-↓
-
-Permission Request
-
-↓
-
-Data Upload
-
-```
-
----
-
-## Behavior Sequence Analysis
-
-分析行为序列。
-
-
----
-
-# 8.4 Dynamic Analysis Result
-
-示例：
-
-```json
-{
-"type":"dynamic",
-
-"behavior":[
-
-{
-"action":"collect",
-
-"object":"location"
-},
-
-{
-"action":"upload",
-
-"destination":"xxx.com"
-}
-
-]
-
-}
-```
-
----
-
-# 9. Analysis Result Management
-
-## 9.1 定位
-
-负责管理静态分析和动态分析输出结果。
-
-核心能力：
-
-- 结果汇聚；
-- 数据标准化；
-- 结果存储；
-- 查询服务。
-
-
----
-
-# 9.2 Result Model
-
-统一模型：
-
-```
-Analysis Result
-
-├── Static Result
-
-├── Dynamic Result
-
-├── Runtime Trace
-
-├── Network Evidence
-
-├── Screenshot
-
-├── File Evidence
-
-└── Metadata
-
-```
-
----
-
-# 10. 与 Detection Service Layer 的关系
-
-Analysis Engine 输出：
-
-```
-Analysis Result
-```
-
-Detection Service 消费：
-
-```
-Analysis Result
-```
-
-例如：
-
----
-
-## 隐私检测
-
-输入：
-
-```
-Location Collection
-
-+
-
-Network Upload
-
-```
-
-判断：
-
-```
-Privacy Violation
-```
-
----
-
-## 恶意广告检测
-
-输入：
-
-```
-Overlay Window
-
-+
-
-Auto Click
-
-+
-
-Background Launch
-
-```
-
-判断：
-
-```
-Malicious Advertisement
-```
-
----
-
-## 木马检测
-
-输入：
-
-```
-Dynamic Loading
-
-+
-
-Remote Download
-
-+
-
-Execution
-
-```
-
-判断：
-
-```
-Malware Risk
-```
-
----
-
-# 11. 技术指标
-
-|能力|指标|
-|-|-:|
-|APK解析成功率|≥99%|
-|DEX解析覆盖率|≥95%|
-|静态代码分析覆盖率|≥90%|
-|动态行为采集覆盖率|≥95%|
-|Runtime API监控覆盖率|≥95%|
-|网络行为采集覆盖率|100%|
-|行为重建准确率|≥90%|
-|单应用分析时间|≤15分钟|
-
----
-
-# 12. 本章总结
-
-Analysis Engine Layer 是移动应用安全检测平台的核心技术基础。
-
-通过：
-
-```
-Static Analysis
-
-+
-
-Dynamic Analysis
-
-↓
-
-Analysis Result
-
-```
-
-完成应用安全信号采集。
-
-其中：
-
-- Static Analysis 负责理解程序结构；
-- Dynamic Analysis 负责观察运行行为；
-- Program Representation 支撑静态程序分析；
-- Runtime Instrumentation 支撑动态行为采集；
-- Behavior Reconstruction 提升动态结果语义化能力。
-
-最终输出标准化 Analysis Result，供 Detection Service Layer 完成：
-
-- 恶意软件检测；
-- 隐私合规检测；
-- 恶意广告检测；
-- 涉诈检测；
-- 内容安全检测；
-- 仿冒侵权检测。
-
-```
+后续章节将分别介绍各模块的设计、关键技术、实现流程及技术指标。
