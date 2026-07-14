@@ -212,7 +212,6 @@ Detection Report
 │   ├── Ad Detection Result
 │   ├── Content Compliance Result
 │   ├── Impersonation Result
-│   └── SDK Risk Result
 ├── Risk Evidence
 │   ├── Static Evidence
 │   ├── Dynamic Evidence

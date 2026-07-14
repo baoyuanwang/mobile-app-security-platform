@@ -271,7 +271,6 @@
 | 广告行为检测 | UI State Machine / Ad SDK Fingerprinting | 界面状态机建模、广告 SDK 指纹识别与行为判定 |
 | 内容安全检测 | NLP / OCR / Multi-modal Classification | 文本分类、图像识别、多模态内容合规判断 |
 | 仿冒侵权检测 | Perceptual Hash / Feature Matching / SIPI | 感知哈希、特征匹配、图标/名称相似度计算 |
-| SDK 风险检测 | SDK Fingerprinting / Behavior Profiling | SDK 指纹提取、行为画像建模、供应链风险分析 |
 | AI 辅助分析 | LLM / RAG / Few-shot Learning | 大语言模型辅助研判、检索增强生成、小样本学习 |
 
 ## 8.4 横向平台关键技术
@@ -309,8 +308,6 @@
 | 广告行为检测 | 广告 SDK 识别覆盖率 | ≥ 95% | 主流广告 SDK 的指纹识别覆盖 |
 | 内容安全检测 | 违规内容识别率 | ≥ 90% | 违规文本/图像内容识别准确度 |
 | 仿冒侵权检测 | 仿冒应用识别率 | ≥ 90% | 图标/名称/包名仿冒识别准确度 |
-| SDK 风险检测 | SDK 识别覆盖率 | ≥ 95% | 主流 SDK 的指纹识别覆盖度 |
-| SDK 风险检测 | SDK 风险行为检出率 | ≥ 85% | SDK 恶意/违规行为识别准确度 |
 
 ## 9.2 性能指标
 

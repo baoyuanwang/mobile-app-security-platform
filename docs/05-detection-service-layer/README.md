@@ -21,8 +21,7 @@ Detection Service Layer 面向具体安全场景构建检测能力，包括：
 - 涉诈风险检测（Fraud Detection）；
 - 恶意广告检测（Advertisement Detection）；
 - 内容安全检测（Content Compliance Detection）；
-- 仿冒侵权检测（Impersonation Detection）；
-- SDK 风险检测（SDK Risk Detection）。
+- 仿冒侵权检测（Impersonation Detection）。
 
 Detection Service Layer 不负责应用程序解析、不负责底层行为采集，而是消费分析结果，并结合安全知识和检测策略形成业务检测结论。
 
@@ -57,7 +56,7 @@ Detection Service Layer 位于 Analysis Engine Layer 和 Application Access Laye
 │         Detection Service Layer              │
 │                                              │
 │  Malware | Privacy | Fraud | Ad | Content   │
-│  SDK Risk | Impersonation                    │
+│  Impersonation                               │
 └──────────────────────────────────────────────┘
                      ▲
                      │
@@ -126,7 +125,7 @@ Detection Service Layer 主要承担以下职责。
 
 # 5. Architecture
 
-Detection Service Layer 由七个检测服务组成。
+Detection Service Layer 由六个检测服务组成。
 
 ```text
 Detection Service Layer
@@ -136,8 +135,7 @@ Detection Service Layer
 ├── Fraud Detection
 ├── Advertisement Detection
 ├── Content Compliance Detection
-├── Impersonation Detection
-└── SDK Risk Detection
+└── Impersonation Detection
 ```
 
 各检测服务共享：
@@ -157,11 +155,11 @@ Standardized Analysis Result
          ▼
 Detection Service Layer
          │
-    ┌────┼────┬────┬────┬────┬────┐
-    ▼    ▼    ▼    ▼    ▼    ▼    ▼
-  Mal  Priv  Fraud  Ad  Content Imp  SDK
-    │    │    │    │    │    │    │
-    └────┴────┴────┴────┴────┴────┘
+    ┌────┼────┬────┬────┬────┐
+    ▼    ▼    ▼    ▼    ▼    ▼
+  Mal  Priv  Fraud  Ad  Content Imp
+    │    │    │    │    │    │
+    └────┴────┴────┴────┴────┘
          │
          ▼
   Detection Result Aggregation
@@ -229,20 +227,20 @@ Detection Service Layer 的关键技术体系如下。
 
 | 技术领域 | 关键技术 | 适用检测服务 |
 |----------|---------|-------------|
-| 特征匹配 | YARA / ClamAV / Custom Signature Engine | Malware, SDK |
+| 特征匹配 | YARA / ClamAV / Custom Signature Engine | Malware |
 | 代码相似性 | SSDeep / TLSH / BinDiff / SimHash | Malware, Impersonation |
 | 恶意分类 | CNN / LSTM / Random Forest / XGBoost | Malware, Fraud |
 | 图神经网络 | GNN / GraphSAGE / GCN | Malware, Fraud |
 | 污点分析 | Static Taint / Dynamic Taint | Privacy |
-| 数据流追踪 | Data Flow Analysis / Taint Tracking | Privacy, SDK |
+| 数据流追踪 | Data Flow Analysis / Taint Tracking | Privacy |
 | 隐私策略引擎 | Rule Engine / Policy Evaluation | Privacy |
 | 风险评分 | Scoring Model / Risk Quantification | Fraud, Ad |
 | 关联图谱 | Knowledge Graph / Link Analysis | Fraud, Malware |
 | NLP | Text Classification / NER / Sentiment | Content, Fraud |
 | OCR / 图像识别 | Tesseract / PaddleOCR / CNN | Content, Impersonation |
 | 感知哈希 | pHash / dHash / aHash / SIFT | Impersonation |
-| SDK 指纹 | Bytecode Pattern / API Fingerprint / Metadata | SDK, Ad |
-| 行为画像 | Behavior Profiling / Sequence Modeling | Ad, SDK |
+| SDK 指纹 | Bytecode Pattern / API Fingerprint / Metadata | Ad |
+| 行为画像 | Behavior Profiling / Sequence Modeling | Ad |
 | 大语言模型 | LLM / RAG / Few-shot | 全部（辅助） |
 
 ---
@@ -265,7 +263,6 @@ Detection Service Layer 的关键技术指标如下。
 | 违规广告检出率 | ≥ 90% | 违规广告行为的识别覆盖度 |
 | 内容违规识别率 | ≥ 90% | 违规内容识别准确度 |
 | 仿冒应用识别率 | ≥ 90% | 仿冒应用识别准确度 |
-| SDK 风险检出率 | ≥ 85% | SDK 恶意/违规行为识别 |
 
 ## 9.2 检测效率指标
 
@@ -327,11 +324,6 @@ Detection Result
 │   │   ├── Similarity Score
 │   │   ├── Target App
 │   │   └── Evidence
-│   └── SDK Risk Result
-│       ├── Risk Level
-│       ├── SDK Info
-│       ├── Risk Type
-│       └── Evidence
 ├── Overall Risk Level
 └── Recommendation
 ```
@@ -404,8 +396,7 @@ Detection Service Layer 遵循以下设计原则。
 ├── fraud-detection.md
 ├── advertisement-detection.md
 ├── content-compliance-detection.md
-├── impersonation-detection.md
-└── sdk-risk-detection.md
+└── impersonation-detection.md
 ```
 
 各模块职责如下：
@@ -418,7 +409,6 @@ Detection Service Layer 遵循以下设计原则。
 | Advertisement Detection | 识别恶意广告和违规广告行为 |
 | Content Compliance Detection | 识别内容安全违规 |
 | Impersonation Detection | 识别仿冒侵权应用 |
-| SDK Risk Detection | 识别第三方 SDK 安全风险 |
 
 ---
 
@@ -426,7 +416,7 @@ Detection Service Layer 遵循以下设计原则。
 
 Detection Service Layer 是移动应用安全检测平台的业务检测核心。
 
-它通过七个专业检测服务，基于 Analysis Engine Layer 的分析结果，结合规则、特征、AI 和知识库，对应用安全风险进行全面识别和判断。
+它通过六个专业检测服务，基于 Analysis Engine Layer 的分析结果，结合规则、特征、AI 和知识库，对应用安全风险进行全面识别和判断。
 
 关键技术涵盖特征匹配（YARA）、代码相似性分析（SSDeep/BinDiff）、机器学习分类（CNN/LSTM/GNN）、污点分析、风险评分、知识图谱、NLP/OCR、感知哈希等。
 

@@ -253,7 +253,6 @@ Risk Decision
 - Fraud Detection
 - Malicious Advertisement Detection
 - Content Compliance Detection
-- SDK Risk Detection
 - Impersonation Detection
 
 ---
